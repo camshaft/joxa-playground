@@ -1,0 +1,57 @@
+; Main module
+(ns playground
+  (require application))
+
+(defn+ start ()
+  (application/start :crypto)
+  (application/start :ranch)
+  (application/start :cowboy)
+  (application/start :playground))
+
+; Supervisor
+(ns playground-sup
+  (attr behavior :supervisor)
+  (require supervisor))
+
+(defn+ start-link ()
+  (supervisor/start_link {:local ($namespace)} ($namespace) []))
+
+(defn+ init (arg)
+  {:ok {{:one_for_one 10 10} []}})
+
+; Application
+(ns playground-app
+  (require playground-sup)
+  (require (cowboy :joxify))
+  (require (cowboy_router :joxify))
+  (attr behavior :application))
+
+(defn start-cowboy()
+  (cowboy/start-http :http 100 [{:port 5000}] [
+    {:env [{:dispatch (cowboy-router/compile [
+      {:_ [
+        {<<"/">> :playground-root []}
+      ]}
+    ])}]}]))
+
+(defn+ start (_start-type _start-args)
+  (do
+    (start-cowboy)
+    (playground-sup/start-link)))
+
+(defn+ stop(_state)
+  :ok)
+
+; Root page
+(ns playground-root
+  (require (cowboy_req :joxify)))
+
+(defn+ init (_transport req opts)
+  {:ok req opts})
+
+(defn+ handle (req state)
+  (case (cowboy-req/reply 200 [] <<"Hello world">> req)
+    ({:ok req2}
+      {:ok req2 state})
+    (_
+      {:ok req state})))
